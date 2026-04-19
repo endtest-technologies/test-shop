@@ -109,7 +109,7 @@
       background:#fff;
       color:#0b1e23;
       margin-top:10px;
-      transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .btn:hover{
       background:var(--brand);
@@ -139,8 +139,8 @@
       margin:10px 0 0 0;
       padding:10px 12px;
       border-radius:var(--radius);
-      background: rgba(214,69,69,.18);
-      border:1px solid rgba(214,69,69,.45);
+      background: rgba(140, 25, 25, 0.88);
+      border:1px solid rgba(255, 120, 120, 0.35);
       color:#fff;
       text-align:left;
       font-size:13px;
@@ -177,7 +177,7 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      transition: background-color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .burger:hover{
       background: rgba(255,255,255,.16);
@@ -212,7 +212,7 @@
       justify-content:center;
       font-weight:900;
       color:#fff;
-      transition: background-color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .cart-btn:hover{
       background: rgba(255,255,255,.16);
@@ -355,7 +355,7 @@
       background:#fff;
       color:#0f172a;
       white-space:nowrap;
-      transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .btn-sm:hover{
       background:var(--brand);
@@ -371,6 +371,13 @@
       background:var(--brand);
       color:#fff;
       border-color:var(--brand);
+    }
+    .btn-sm:disabled,
+    .btn:disabled,
+    .cart-btn:disabled,
+    .burger:disabled{
+      opacity:.55;
+      cursor:not-allowed;
     }
 
     /* Detail modal */
@@ -433,7 +440,7 @@
       background:#fff;
       cursor:pointer;
       font-weight:950;
-      transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .close:hover{
       background:var(--brand);
@@ -542,7 +549,7 @@
       cursor:pointer;
       font-weight:950;
       color:#0f172a;
-      transition: background-color .16s ease, color .16s ease;
+      transition: background-color .16s ease, color .16s ease, opacity .16s ease;
     }
     .drawer a:hover, .drawer button:hover{
       background:var(--brand);
@@ -592,7 +599,7 @@
       background:#fff;
       cursor:pointer;
       font-weight:980;
-      transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, opacity .16s ease;
     }
     .qty button:hover{
       background:var(--brand);
@@ -701,7 +708,6 @@
             <div>
               <span class="pill">tester_basic</span>
               <span class="pill">tester_locked</span>
-              <span class="pill">tester_glitch</span>
               <span class="pill">tester_slow</span>
             </div>
             <div style="margin-top:8px">
@@ -893,12 +899,12 @@
   <script>
     (function(){
       const IMAGE_BASE = "https://endtest-demo.io/";
+      const SLOW_DELAY_MS = 900;
 
       // --------- Demo Accounts ----------
       const DEMO_USERS = new Map([
         ["tester_basic", {status:"ok"}],
         ["tester_locked", {status:"locked"}],
-        ["tester_glitch", {status:"glitch"}],
         ["tester_slow", {status:"slow"}],
       ]);
       const DEMO_PASSWORD = "test_password";
@@ -954,7 +960,8 @@
         user: null,
         basket: new Map(),
         sort: "name_asc",
-        checkout: { firstName:"", lastName:"", postalCode:"" }
+        checkout: { firstName:"", lastName:"", postalCode:"" },
+        actionBusy: false
       };
 
       // --------- Helpers ----------
@@ -971,6 +978,7 @@
         $("#drawerOverlay").style.display = "block";
         $("#drawer").classList.add("open");
       }
+
       function closeMenu(){
         $("#drawerOverlay").style.display = "none";
         $("#drawer").classList.remove("open");
@@ -996,13 +1004,16 @@
         $("#modalCartButton").classList.toggle("primary", !inBasket);
 
         $("#modalCartButton").onclick = () => {
-          toggleBasketItem(item.id);
-          openItemModal(item);
-          renderAll();
+          runWithUserDelay(() => {
+            toggleBasketItem(item.id);
+            openItemModal(item);
+            renderAll();
+          });
         };
 
         $("#itemModalOverlay").style.display = "flex";
       }
+
       function closeItemModal(){
         $("#itemModalOverlay").style.display = "none";
       }
@@ -1030,6 +1041,50 @@
       function setQty(id, qty){
         if (qty <= 0) state.basket.delete(id);
         else state.basket.set(id, qty);
+      }
+
+      function escapeHtml(str){
+        return String(str)
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function isSlowUser(){
+        return state.user === "tester_slow";
+      }
+
+      function setActionBusy(isBusy){
+        state.actionBusy = isBusy;
+
+        document.querySelectorAll("button").forEach(btn => {
+          if (btn.id === "loginButton" && $("#loginView").style.display !== "none") return;
+          btn.disabled = isBusy;
+        });
+
+        document.querySelectorAll(".drawer a").forEach(link => {
+          link.style.pointerEvents = isBusy ? "none" : "";
+          link.style.opacity = isBusy ? ".55" : "";
+        });
+      }
+
+      function runWithUserDelay(fn){
+        if (state.actionBusy) return;
+
+        if (isSlowUser()) {
+          setActionBusy(true);
+          setTimeout(() => {
+            try {
+              fn();
+            } finally {
+              setActionBusy(false);
+            }
+          }, SLOW_DELAY_MS);
+        } else {
+          fn();
+        }
       }
 
       // --------- Renderers ----------
@@ -1086,8 +1141,10 @@
         grid.querySelectorAll("[data-basket]").forEach(btn=>{
           btn.addEventListener("click", (e)=>{
             const id = e.currentTarget.getAttribute("data-basket");
-            toggleBasketItem(id);
-            renderAll();
+            runWithUserDelay(() => {
+              toggleBasketItem(id);
+              renderAll();
+            });
           });
         });
 
@@ -1095,7 +1152,10 @@
           t.addEventListener("click", (e)=>{
             const id = e.currentTarget.getAttribute("data-open");
             const item = CATALOG.find(x=>x.id===id);
-            if (item) openItemModal(item);
+            if (!item) return;
+            runWithUserDelay(() => {
+              openItemModal(item);
+            });
           });
         });
       }
@@ -1147,22 +1207,30 @@
         panel.querySelectorAll("[data-inc]").forEach(b=>{
           b.addEventListener("click", (e)=>{
             const id = e.currentTarget.getAttribute("data-inc");
-            setQty(id, (state.basket.get(id)||0) + 1);
-            renderAll();
+            runWithUserDelay(() => {
+              setQty(id, (state.basket.get(id)||0) + 1);
+              renderAll();
+            });
           });
         });
+
         panel.querySelectorAll("[data-dec]").forEach(b=>{
           b.addEventListener("click", (e)=>{
             const id = e.currentTarget.getAttribute("data-dec");
-            setQty(id, (state.basket.get(id)||0) - 1);
-            renderAll();
+            runWithUserDelay(() => {
+              setQty(id, (state.basket.get(id)||0) - 1);
+              renderAll();
+            });
           });
         });
+
         panel.querySelectorAll("[data-remove]").forEach(b=>{
           b.addEventListener("click", (e)=>{
             const id = e.currentTarget.getAttribute("data-remove");
-            state.basket.delete(id);
-            renderAll();
+            runWithUserDelay(() => {
+              state.basket.delete(id);
+              renderAll();
+            });
           });
         });
       }
@@ -1222,15 +1290,6 @@
         if ($("#checkoutOverviewView").classList.contains("active")) renderReview();
       }
 
-      function escapeHtml(str){
-        return String(str)
-          .replaceAll("&","&amp;")
-          .replaceAll("<","&lt;")
-          .replaceAll(">","&gt;")
-          .replaceAll('"',"&quot;")
-          .replaceAll("'","&#039;");
-      }
-
       // --------- Navigation ----------
       function gotoCatalog(){ showView("#catalogView"); }
       function gotoBasket(){ showView("#cartView"); renderBasket(); }
@@ -1278,7 +1337,7 @@
             $("#loginButton").disabled = false;
             $("#loginButton").textContent = "Sign in";
             finish();
-          }, 900);
+          }, SLOW_DELAY_MS);
         } else {
           finish();
         }
@@ -1289,6 +1348,7 @@
         state.basket.clear();
         state.sort = "name_asc";
         state.checkout = { firstName:"", lastName:"", postalCode:"" };
+        state.actionBusy = false;
 
         $("#loginUsername").value = "";
         $("#loginPassword").value = "";
@@ -1306,6 +1366,14 @@
         closeItemModal();
         closeInfoModal();
 
+        document.querySelectorAll(".drawer a").forEach(link => {
+          link.style.pointerEvents = "";
+          link.style.opacity = "";
+        });
+        document.querySelectorAll("button").forEach(btn => {
+          btn.disabled = false;
+        });
+
         $("#shell").style.display = "none";
         $("#loginView").style.display = "flex";
       }
@@ -1315,49 +1383,88 @@
       $("#loginPassword").addEventListener("keydown", (e)=>{ if (e.key === "Enter") signIn(); });
       $("#loginUsername").addEventListener("keydown", (e)=>{ if (e.key === "Enter") signIn(); });
 
-      $("#menuButton").addEventListener("click", openMenu);
-      $("#closeMenuButton").addEventListener("click", closeMenu);
-      $("#drawerOverlay").addEventListener("click", closeMenu);
+      $("#menuButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => openMenu());
+      });
 
-      $("#menuCatalogLink").addEventListener("click", (e)=>{ e.preventDefault(); closeMenu(); gotoCatalog(); });
+      $("#closeMenuButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => closeMenu());
+      });
+
+      $("#drawerOverlay").addEventListener("click", ()=> {
+        runWithUserDelay(() => closeMenu());
+      });
+
+      $("#menuCatalogLink").addEventListener("click", (e)=>{
+        e.preventDefault();
+        runWithUserDelay(() => {
+          closeMenu();
+          gotoCatalog();
+        });
+      });
+
       $("#menuInfoLink").addEventListener("click", (e)=>{
         e.preventDefault();
-        closeMenu();
-        openInfoModal();
+        runWithUserDelay(() => {
+          closeMenu();
+          openInfoModal();
+        });
       });
+
       $("#menuResetButton").addEventListener("click", ()=>{
-        state.basket.clear();
-        state.sort = "name_asc";
-        $("#catalogSort").value = "name_asc";
-        renderAll();
-        closeMenu();
-        gotoCatalog();
+        runWithUserDelay(() => {
+          state.basket.clear();
+          state.sort = "name_asc";
+          $("#catalogSort").value = "name_asc";
+          renderAll();
+          closeMenu();
+          gotoCatalog();
+        });
       });
-      $("#menuLogoutButton").addEventListener("click", ()=> signOut());
 
-      $("#closeInfoModalButton").addEventListener("click", closeInfoModal);
-      $("#okInfoModalButton").addEventListener("click", closeInfoModal);
+      $("#menuLogoutButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => signOut());
+      });
+
+      $("#closeInfoModalButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => closeInfoModal());
+      });
+
+      $("#okInfoModalButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => closeInfoModal());
+      });
+
       $("#infoModalOverlay").addEventListener("click", (e)=>{
-        if (e.target === $("#infoModalOverlay")) closeInfoModal();
+        if (e.target === $("#infoModalOverlay")) {
+          runWithUserDelay(() => closeInfoModal());
+        }
       });
 
-      $("#openCartButton").addEventListener("click", ()=> gotoBasket());
+      $("#openCartButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => gotoBasket());
+      });
 
       $("#catalogSort").addEventListener("change", (e)=>{
         state.sort = e.target.value;
         renderAll();
       });
 
-      $("#backToCatalogButton").addEventListener("click", gotoCatalog);
+      $("#backToCatalogButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => gotoCatalog());
+      });
 
       $("#startCheckoutButton").addEventListener("click", ()=>{
         if (basketCount() === 0) return;
-        $("#checkoutError").classList.remove("show");
-        $("#checkoutError").textContent = "";
-        showView("#checkoutInfoView");
+        runWithUserDelay(() => {
+          $("#checkoutError").classList.remove("show");
+          $("#checkoutError").textContent = "";
+          showView("#checkoutInfoView");
+        });
       });
 
-      $("#cancelCheckoutButton").addEventListener("click", ()=> gotoBasket());
+      $("#cancelCheckoutButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => gotoBasket());
+      });
 
       $("#continueCheckoutButton").addEventListener("click", ()=>{
         const firstName = $("#checkoutFirstName").value.trim();
@@ -1384,27 +1491,40 @@
           return;
         }
 
-        state.checkout = { firstName, lastName, postalCode: postal };
-        renderReview();
-        showView("#checkoutOverviewView");
+        runWithUserDelay(() => {
+          state.checkout = { firstName, lastName, postalCode: postal };
+          renderReview();
+          showView("#checkoutOverviewView");
+        });
       });
 
-      $("#backToDetailsButton").addEventListener("click", ()=> showView("#checkoutInfoView"));
+      $("#backToDetailsButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => showView("#checkoutInfoView"));
+      });
 
       $("#finishOrderButton").addEventListener("click", ()=>{
-        state.basket.clear();
-        renderBadge();
-        showView("#orderCompleteView");
+        runWithUserDelay(() => {
+          state.basket.clear();
+          renderBadge();
+          showView("#orderCompleteView");
+        });
       });
 
       $("#returnHomeButton").addEventListener("click", ()=>{
-        gotoCatalog();
-        renderAll();
+        runWithUserDelay(() => {
+          gotoCatalog();
+          renderAll();
+        });
       });
 
-      $("#closeModalButton").addEventListener("click", closeItemModal);
+      $("#closeModalButton").addEventListener("click", ()=> {
+        runWithUserDelay(() => closeItemModal());
+      });
+
       $("#itemModalOverlay").addEventListener("click", (e)=>{
-        if (e.target === $("#itemModalOverlay")) closeItemModal();
+        if (e.target === $("#itemModalOverlay")) {
+          runWithUserDelay(() => closeItemModal());
+        }
       });
 
       document.addEventListener("keydown", (e)=>{
